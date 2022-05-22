@@ -2,6 +2,12 @@
 #include<stdlib.h>
 #include<time.h>
 #include<string.h>
+int NODE_NUM=0;
+int stack[1024];
+void print_stack(){
+    for(int i=0;i<NODE_NUM;i++) printf("%d ", stack[i]);
+}
+
 
 struct node{
     int val;
@@ -17,8 +23,25 @@ struct node* new_node(int num){
     return a;
 }
 
+void mid_order(struct node *a){
+    if(a==NULL) return;
+    mid_order(a->l);
+    stack[NODE_NUM]=a->val;
+    NODE_NUM++;
+    mid_order(a->r);
+}
+
+void pre_order(struct node *a){
+    if(a==NULL) return;
+    stack[NODE_NUM]=a->val;
+    NODE_NUM++;
+    pre_order(a->l); 
+    pre_order(a->r);  
+}
+
 struct node* search(struct node* a, int num){
     if(a==NULL) return NULL;
+    if(a->val==num) return a;
     struct node* ret;
     ret=num<(a->val)?search(a->l, num): search(a->r, num);
     if(ret==NULL) return a;
@@ -102,6 +125,145 @@ struct node* plot_Nnode_tree_auto(int len){
     return root;
 }
 
+struct node* search_parent(struct node* a, int num){
+    struct node* ret=a;
+    if(a->l!=NULL){
+        if(a->l->val==num) return a;
+        ret=search_parent(a->l,num);
+    }
+    if(a->r!=NULL){
+        if(a->r->val==num) return a;
+        ret=search_parent(a->r, num);
+    }
+    return ret;
+}
+
+struct node* get_max(struct node *a){
+    if(a->r==NULL) return a;
+    get_max(a->r);
+}
+
+void delete(struct node* a, int num){
+    struct node *to_delete=search(a, num);//分类讨论
+    if(to_delete->val!=num) return;
+    struct node *parent=a;
+    if(to_delete!=a) parent=search_parent(a, num);
+    if(to_delete->l==NULL&&to_delete->r==NULL){//是叶节点的情况，把父节点的指向删除     
+        if(parent->l!=NULL&&parent->l->val==num) parent->l=NULL;
+        if(parent->r!=NULL&&parent->r->val==num) parent->r=NULL;
+    }
+    else if((to_delete->l==NULL)|(to_delete->r==NULL)){//有一个节点
+        if(to_delete->l==NULL){
+            if(parent->l!=NULL&&parent->l->val==num) parent->l=to_delete->r;
+            if(parent->r!=NULL&&parent->r->val==num) parent->r=to_delete->r;
+        }
+        if(to_delete->r==NULL){
+            if(parent->l!=NULL&&parent->l->val==num) parent->l=to_delete->l;
+            if(parent->r!=NULL&&parent->r->val==num) parent->r=to_delete->l;
+        }
+    }
+    else{//满子节点
+        struct node *left_max=get_max(to_delete->l);
+        struct node *left_max_parent=search_parent(a, left_max->val);
+        to_delete->val=left_max->val;
+        if(left_max_parent==to_delete){//特殊情况，因为要删的是左节点
+            to_delete->l=left_max->l;}
+        else{
+            to_delete->l->r=NULL;}
+    }
+}
+
+int max_depth(struct node* a){
+    int depth=0;
+    if(a==NULL) return 0;
+    depth=max_depth(a->l)>max_depth(a->r)?max_depth(a->l)+1:max_depth(a->r)+1;
+    return depth;
+}
+
+int min_depth(struct node* a){
+    int depth=0;//这边比最大深度复杂一点，最大深度一边为空允许继续递归，但最小深度就停止了，即便不是叶节点，所以就加了个单孩子节点的逻辑
+    if(a->l==NULL&&a->r==NULL) return 1;
+    else if(a->l!=NULL&&a->r!=NULL) return min_depth(a->l)<min_depth(a->r)?min_depth(a->l)+1:min_depth(a->r)+1;
+    else{
+        if(a->l==NULL) return min_depth(a->r)+1;
+        else return min_depth(a->l)+1;
+    }
+    return depth;
+}
+
+void sym(struct node* a){
+    if(a==NULL) return;
+    struct node *tmp=a->l;
+    a->l=a->r;
+    a->r=tmp;
+    sym(a->l);
+    sym(a->r);  
+}
+
+struct node *R(struct node* a){//右旋
+    struct node *A=a;
+    struct node *B=a->l;
+    struct node *tmp=B->r;
+
+    B->r=A;
+    A->l=tmp;
+
+    return B;
+}
+
+struct node *L(struct node* a){//左旋
+    struct node *A=a;
+    struct node *B=a->r;
+    struct node *tmp=B->l;
+
+    B->l=A;
+    A->r=tmp;
+
+    return B;
+}
+
+int avl_factor(struct node *a){//通过正负性判断左右旋
+    if(a==NULL) return 0;
+    return max_depth(a->l)-max_depth(a->r);
+}
+
+struct node* rebalance(struct node *a){
+    if(a==NULL) return a;
+    int fac=avl_factor(a);
+    if(fac>1&&avl_factor(a->l)>0) return R(a);
+    if(fac<-1&&avl_factor(a->r)<=0) return L(a);
+    if(fac>1&&avl_factor(a->l)<=0){//LR
+        a->l=L(a->l);
+        return R(a);
+    }
+    if(fac<-1&&avl_factor(a->r)>0){//RL
+        a->r=R(a->r);
+        return L(a);
+    }
+    return a;
+}
+
+struct node* struct_avl(struct node *a){
+    NODE_NUM=0;
+    pre_order(a);
+    struct node* root=new_node(stack[0]);
+    for(int i=1; i<NODE_NUM; i++){
+        assert(root, stack[i]);
+        struct node *adjust=search_parent(root,stack[i]);
+        while(adjust!=root){
+            adjust->l=rebalance(adjust->l);
+            adjust->r=rebalance(adjust->r);
+            adjust=search_parent(root,adjust->val);
+        }
+        root->l=rebalance(root->l);
+        root->r=rebalance(root->r);
+        root=rebalance(root);
+    }
+    return root;
+}
+
+
+
 int main(int argc, char **argv){
     struct node* root;
     for(int i=1; i<argc; i++){
@@ -140,6 +302,36 @@ int main(int argc, char **argv){
             scanf("%d",&node);
             assert(root, node);
             plot(root);
+        }
+        if(strcmp(s,"delete")==0){
+            int node;
+            scanf("%d",&node);
+            delete(root, node);
+            plot(root);
+        }
+        if(strcmp(s,"sym")==0){
+            sym(root);
+            plot(root);
+        }
+        if(strcmp(s,"depth")==0){
+            printf("%d\n", max_depth(root));
+        }
+        if(strcmp(s,"min_depth")==0){
+            printf("%d\n", min_depth(root));
+        }
+        if(strcmp(s,"avl")==0){
+            root=struct_avl(root);
+            plot(root);
+        }
+        if(strcmp(s,"mid")==0){
+            NODE_NUM=0;
+            mid_order(root);
+            print_stack();
+        }
+        if(strcmp(s,"pre")==0){
+            NODE_NUM=0;
+            pre_order(root);
+            print_stack();
         }
     }
     
